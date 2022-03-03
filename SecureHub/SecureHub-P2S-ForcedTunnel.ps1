@@ -37,6 +37,34 @@ $azFw = New-AzFirewall -Name $azFwName -ResourceGroupName $rgName -Location $loc
 $azFwLaw = New-AzOperationalInsightsWorkspace -Name $azFwLawName -ResourceGroupName $rgName -Location $location
 Set-AzDiagnosticSetting -ResourceId $AzFW.Id -Enabled $True -Category AzureFirewallApplicationRule, AzureFirewallNetworkRule -WorkspaceId $azFwLaw.ResourceId
 
+#Check on vHub routing status
+$azContext = Get-AzContext
+$azProfile = [Microsoft.Azure.Commands.Common.Authentication.Abstractions.AzureRmProfileProvider]::Instance.Profile
+$profileClient = New-Object -TypeName Microsoft.Azure.Commands.ResourceManager.Common.RMProfileClient -ArgumentList ($azProfile)
+$token = $profileClient.AcquireAccessToken($azContext.Subscription.TenantId)
+$authHeader = @{
+    'Content-Type'='application/json'
+    'Authorization'='Bearer ' + $token.AccessToken
+}
+
+# Invoke the REST API
+$vHubId = $vHub.Id
+$restUri = "https://management.azure.com"+$vHubId+"?api-version=2021-08-01"
+$routingStatus = $false
+
+while ($routingStatus = $false)
+{
+    $response = Invoke-RestMethod -Uri $restUri -Method Get -Headers $authHeader
+    if ($response.properties.routingState -eq "Provisioned") 
+    {
+        $routingStatus = $true
+    }
+    else {
+        Start-Sleep -Seconds 30
+    }
+}
+
+
 #Create static routes in default Route table
 $azFwId = $(Get-AzVirtualHub -ResourceGroupName $rgName -name $vHubName).AzureFirewall.Id
 $azFwRoute = New-AzVHubRoute -Name "internet_traffic" -Destination @("0.0.0.0/0") -DestinationType "CIDR" -NextHop $azFwId -NextHopType "ResourceId"
