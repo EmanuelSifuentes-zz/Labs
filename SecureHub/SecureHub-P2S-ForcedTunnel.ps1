@@ -23,7 +23,7 @@ $vHub = New-AzVirtualHub -ResourceGroupName $rgName -Name $vHubName -VirtualWan 
 New-AzFirewallPolicy -Name $azfwPolicyName -ResourceGroupName $rgName -Location $location
 $azFwPolicy = Get-AzFirewallPolicy -Name $azfwPolicyName -ResourceGroupName $rgName
 
-$networkRule = New-AzFirewallPolicyNetworkRule -Name "AllowRFC1918" -SourceAddress "10.0.0.0/8","172.16.0.0/12","192.168.0.0/16" -Protocol TCP -DestinationAddress * -DestinationPort *
+$networkRule = New-AzFirewallPolicyNetworkRule -Name "AllowRFC1918" -SourceAddress "10.0.0.0/8","172.16.0.0/12","192.168.0.0/16" -Protocol Any -DestinationAddress * -DestinationPort *
 $ruleCollectionCfg = New-AzFirewallPolicyFilterRuleCollection -Name $azfwPolicyRcName -Priority 100 -ActionType Allow -Rule $networkRule
 
 New-AzFirewallPolicyRuleCollectionGroup -Name $azfwPolicyRcgName -Priority 200 -RuleCollection $ruleCollectionCfg -FirewallPolicyObject $azFwPolicy
