@@ -1,3 +1,4 @@
+#Initialize variables
 $rgName = "vwan-demo-rg"
 $vwanName = "vwan-lab"
 $vHubName = "vhub-eu2"
@@ -11,6 +12,11 @@ $azFwLawName = "azfw-law"
 $p2sVpnGatewayName = "vhub-p2s-vpn-gw"
 $vpnClientAddressSpaces = '192.168.0.0/24'
 $vpnServerConfigName = "p2s-vpn-cfg"
+$certFolder = "C:\vwanDemo"
+$rootCertPath = "C:\vwanDemo\rootCert.cer"
+$rootCertb64Path = "C:\vwanDemo\rootCert-base64.cer"
+$rootPfxPath = "C:\vwanDemo\rootPfx.pfx"
+$childPfxPath = "C:\vwanDemo\childPfx.pfx"
 
 #Create RG
 New-AzResourceGroup -name $rgName -Location $location
@@ -52,7 +58,7 @@ $vHubId = $vHub.Id
 $restUri = "https://management.azure.com"+$vHubId+"?api-version=2021-08-01"
 $routingStatus = $false
 
-while ($routingStatus = $false)
+while ($routingStatus -eq $false)
 {
     $response = Invoke-RestMethod -Uri $restUri -Method Get -Headers $authHeader
     if ($response.properties.routingState -eq "Provisioned") 
@@ -76,7 +82,7 @@ $rootCert = New-SelfSignedCertificate -Type Custom -KeySpec Signature `
 -HashAlgorithm sha256 -KeyLength 2048 `
 -CertStoreLocation "Cert:\CurrentUser\My" -KeyUsageProperty Sign -KeyUsage CertSign
 
-New-SelfSignedCertificate -Type Custom -DnsName P2SChildCert -KeySpec Signature `
+$childCert = New-SelfSignedCertificate -Type Custom -DnsName P2SChildCert -KeySpec Signature `
 -Subject "CN=P2SChildCert" -KeyExportPolicy Exportable `
 -HashAlgorithm sha256 -KeyLength 2048 `
 -CertStoreLocation "Cert:\CurrentUser\My" `
@@ -84,16 +90,20 @@ New-SelfSignedCertificate -Type Custom -DnsName P2SChildCert -KeySpec Signature 
 
 
 #Convert root cert to B64 Encoded
-$rootCertPath = "C:\vwanDemo\rootCert.cer"
-$rootCertb64Path = "C:\vwanDemo\rootCert-base64.cer"
-if (!(Test-Path -Path "C:\vwanDemo"))
+if (!(Test-Path -Path $certFolder))
 {
-    mkdir "C:\vwanDemo"
+    mkdir $certFolder
 }
 $rootCertThumbprint = $rootCert.Thumbprint
+$childCertThumbprint = $childCert.Thumbprint
 Export-Certificate -Type CERT -FilePath $rootCertPath -Cert Cert:\CurrentUser\My\$rootCertThumbprint -NoClobber
 certutil -encode $rootCertPath $rootCertb64Path
 Remove-Item -Path $rootCertPath -Force
+
+#Exporting child and root cert for reusability
+$mypwd = ConvertTo-SecureString -String "password" -Force -AsPlainText
+Get-ChildItem -Path Cert:\CurrentUser\My\$rootCertThumbprint | Export-PfxCertificate -FilePath $rootPfxPath -Password $mypwd
+Get-ChildItem -Path Cert:\CurrentUser\My\$childCertThumbprint | Export-PfxCertificate -FilePath $childPfxPath -Password $mypwd
 
 #Create P2S VPN Config
 $p2sVpnCertList = New-Object "System.Collections.Generic.List[String]"
@@ -101,9 +111,11 @@ $p2sVpnCertList.Add($rootCertb64Path)
 
 New-AzVpnServerConfiguration -Name $vpnServerConfigName -ResourceGroupName $rgName -VpnProtocol IkeV2,OpenVPN -VpnAuthenticationType Certificate -VpnClientRootCertificateFilesList $p2sVpnCertList -Location $location
 
-
 #Create P2S VPN GW
 $customDnsServers = New-Object string[] 1
 $customDnsServers[0] = "168.63.129.16"
 $vpnServerConfig = Get-AzVpnServerConfiguration -ResourceGroupName $rgName -Name $vpnServerConfigName
 $createdP2SVpnGateway = New-AzP2sVpnGateway -ResourceGroupName $rgName -Name $p2sVpnGatewayName -VirtualHub $vHub -VpnGatewayScaleUnit 2 -VpnClientAddressPool $vpnClientAddressSpaces -VpnServerConfiguration $vpnServerConfig -EnableInternetSecurityFlag -CustomDnsServer $customDnsServers
+
+#Optional - Clean up certs to avoid mismatch
+#Remove-Item -Path $certFolder -Recurse -Force
