@@ -155,7 +155,7 @@ foreach ($route in $defaultRoutes)
     $tempContent = "Metric information about default route (0.0.0.0/0) for $ifIndex - $ifAlias `n---------------------------------------------------`nInterface Index: $ifIndex`nInterface Alias: $ifAlias`nOld Interface Metric: $oldIfMetric`nOld Route Metric: $oldRouteMetric`n"
     New-Item -Name $fileName -ItemType File -Value $tempContent
 
-    #Change the local metric to 1 higher than VPN
+    #Change the local metric to be higher than VPN
     $route | Set-NetRoute -RouteMetric 256
-    Get-NetIPInterface -ifIndex $route.ifIndex -AddressFamily IPv4 | Set-NetIPInterface -InterfaceMetric 56
+    Get-NetIPInterface -ifIndex $route.ifIndex -AddressFamily IPv4 | Set-NetIPInterface -InterfaceMetric 256
 }
