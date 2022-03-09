@@ -118,4 +118,44 @@ $vpnServerConfig = Get-AzVpnServerConfiguration -ResourceGroupName $rgName -Name
 $createdP2SVpnGateway = New-AzP2sVpnGateway -ResourceGroupName $rgName -Name $p2sVpnGatewayName -VirtualHub $vHub -VpnGatewayScaleUnit 2 -VpnClientAddressPool $vpnClientAddressSpaces -VpnServerConfiguration $vpnServerConfig -EnableInternetSecurityFlag -CustomDnsServer $customDnsServers
 
 #Optional - Clean up certs to avoid mismatch
-#Remove-Item -Path $certFolder -Recurse -Force
+$ask = Read-Host -Prompt "Do you want to delete the existing certificates? Y/N"
+switch ($ask) {
+    y { 
+        Remove-Item -Path $certFolder -Recurse -Force
+        Get-ChildItem -Path Cert:\CurrentUser\My\$rootCertThumbprint | Remove-Item
+        Get-ChildItem -Path Cert:\CurrentUser\My\$childCertThumbprint | Remove-Item
+     }
+    Default {
+        break
+    }
+}
+
+#Interface Modification
+#$Route = Get-NetRoute -AddressFamily ipv4 | ? {$_.DestinationPrefix -eq "0.0.0.0/0"}
+$Route | Set-NetRoute -RouteMetric 256
+Get-NetIPInterface -ifIndex $Route.ifIndex -AddressFamily IPv4 | Set-NetIPInterface -InterfaceMetric 56
+
+$ifMetricPath = "c:\vwanDiags"
+if (!(Test-Path -Path $ifMetricPath))
+{
+    mkdir $ifMetricPath
+}
+
+$defaultRoutes = Get-NetRoute -AddressFamily ipv4 | ? {$_.DestinationPrefix -eq "0.0.0.0/0"}
+cd $ifMetricPath
+
+foreach ($route in $defaultRoutes)
+{
+    $netIpIf = Get-NetIPInterface -InterfaceIndex $route.ifIndex -AddressFamily IPv4
+    $fileName = $netIpIf.ifAlias + '-' + $netIpIf.ifIndex + ".txt"
+    $oldIfMetric = $netIpIf.InterfaceMetric
+    $oldRouteMetric = $route.RouteMetric
+    $ifIndex = $netIpIf.ifIndex
+    $ifAlias = $netIpIf.ifAlias
+    $tempContent = "Metric information about default route (0.0.0.0/0) for $ifIndex - $ifAlias `n---------------------------------------------------`nInterface Index: $ifIndex`nInterface Alias: $ifAlias`nOld Interface Metric: $oldIfMetric`nOld Route Metric: $oldRouteMetric`n"
+    New-Item -Name $fileName -ItemType File -Value $tempContent
+
+    #Change the local metric to 1 higher than VPN
+    $route | Set-NetRoute -RouteMetric 256
+    Get-NetIPInterface -ifIndex $route.ifIndex -AddressFamily IPv4 | Set-NetIPInterface -InterfaceMetric 56
+}
