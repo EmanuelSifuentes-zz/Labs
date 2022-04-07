@@ -130,10 +130,10 @@ switch ($ask) {
     }
 }
 
-#Interface Modification
-#$Route = Get-NetRoute -AddressFamily ipv4 | ? {$_.DestinationPrefix -eq "0.0.0.0/0"}
+<#Interface Modification
+$Route = Get-NetRoute -AddressFamily ipv4 | ? {$_.DestinationPrefix -eq "0.0.0.0/0"}
 $Route | Set-NetRoute -RouteMetric 256
-Get-NetIPInterface -ifIndex $Route.ifIndex -AddressFamily IPv4 | Set-NetIPInterface -InterfaceMetric 56
+Get-NetIPInterface -ifIndex $Route.ifIndex -AddressFamily IPv4 | Set-NetIPInterface -InterfaceMetric 56#>
 
 $ifMetricPath = "c:\vwanDiags"
 if (!(Test-Path -Path $ifMetricPath))
